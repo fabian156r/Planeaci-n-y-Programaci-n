@@ -118,6 +118,11 @@ const readingMessage = document.getElementById('reading-message');
 const downloadPdfBtn = document.getElementById('download-pdf-btn');
 const restartBtn = document.getElementById('restart-btn');
 const nameInput = document.getElementById('username');
+const progressFill = document.getElementById('progress-fill');
+const timerText = document.getElementById('timer-text');
+const scoreRing = document.getElementById('score-ring');
+const scoreRingText = document.getElementById('score-ring-text');
+const resultEmoji = document.getElementById('result-emoji');
 
 // Audio
 const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -207,23 +212,27 @@ function startQuestionCycle() {
     const currentQ = questions[currentQuestionIndex];
     questionText.textContent = currentQ.q;
     questionCounter.textContent = `Pregunta ${currentQuestionIndex + 1} de ${questions.length}`;
-    
+    progressFill.style.width = `${(currentQuestionIndex / questions.length) * 100}%`;
+
     optionsContainer.innerHTML = '';
     optionsContainer.classList.add('hidden');
     feedbackMessage.classList.add('hidden');
     readingMessage.classList.remove('hidden');
-    
+
+    // Configurar temporizador de lectura (anillo circular)
     readTimeLeft = 5;
-    timerDisplay.className = 'reading-mode';
-    timerDisplay.textContent = `Lectura: ${readTimeLeft}s`;
-    
+    timerDisplay.className = 'timer-ring reading-mode';
+    timerDisplay.style.setProperty('--progress', 100);
+    timerText.textContent = readTimeLeft;
+
     clearInterval(mainTimerInterval);
     clearInterval(readTimerInterval);
-    
+
     readTimerInterval = setInterval(() => {
         readTimeLeft--;
-        timerDisplay.textContent = `Lectura: ${readTimeLeft}s`;
-        
+        timerText.textContent = readTimeLeft;
+        timerDisplay.style.setProperty('--progress', (readTimeLeft / 5) * 100);
+
         if (readTimeLeft <= 0) {
             clearInterval(readTimerInterval);
             showOptionsAndStartTimer(currentQ);
@@ -235,25 +244,30 @@ function showOptionsAndStartTimer(currentQ) {
     readingMessage.classList.add('hidden');
     optionsContainer.classList.remove('hidden');
     
+    const letters = ['A', 'B', 'C', 'D'];
     currentQ.options.forEach((option, index) => {
         const button = document.createElement('button');
-        button.textContent = option;
+        button.innerHTML = `<span class="option-letter">${letters[index]}</span><span class="option-text">${option}</span>`;
         button.classList.add('option-btn');
         button.addEventListener('click', () => handleAnswer(index, button));
         optionsContainer.appendChild(button);
     });
 
+    // Iniciar temporizador principal de 30s (anillo circular)
     timeLeft = 30;
-    timerDisplay.className = 'answering-mode';
-    timerDisplay.textContent = `Tiempo: ${timeLeft}s`;
-    
+    timerDisplay.className = 'timer-ring answering-mode';
+    timerDisplay.style.setProperty('--progress', 100);
+    timerText.textContent = timeLeft;
+
     mainTimerInterval = setInterval(() => {
         timeLeft--;
-        timerDisplay.textContent = `Tiempo: ${timeLeft}s`;
-        
+        timerText.textContent = timeLeft;
+        timerDisplay.style.setProperty('--progress', (timeLeft / 30) * 100);
+        timerDisplay.classList.toggle('urgent', timeLeft <= 8 && timeLeft > 0);
+
         if (timeLeft <= 0) {
             clearInterval(mainTimerInterval);
-            handleAnswer(-1, null); 
+            handleAnswer(-1, null);
         }
     }, 1000);
 }
@@ -319,55 +333,227 @@ function handleAnswer(selectedIndex, selectedButton) {
 }
 
 function showResults() {
+    progressFill.style.width = '100%';
     quizScreen.classList.remove('active');
     resultScreen.classList.add('active');
-    document.getElementById('final-score-text').textContent = 
+    document.getElementById('final-score-text').textContent =
         `${participantName}, has obtenido ${score} aciertos de ${questions.length} preguntas.`;
+
+    const percentage = (score / questions.length) * 100;
+    scoreRingText.textContent = `${score}/${questions.length}`;
+    setTimeout(() => scoreRing.style.setProperty('--progress', percentage), 100);
+
+    if (percentage >= 80) {
+        resultEmoji.textContent = '🏆';
+    } else if (percentage >= 50) {
+        resultEmoji.textContent = '👍';
+    } else {
+        resultEmoji.textContent = '💪';
+    }
 }
 
-// Generación de PDF
+// DOCUMENTACIÓN: Genera un PDF con formato tipo "reporte profesional" con el logo de la
+// empresa como membrete, tarjeta de resumen con insignia de puntuación y tarjetas de
+// color por pregunta. El logo se usa desde LOGO_DATA_URL (definido en logo-data.js) en vez
+// de descargarlo con fetch(), ya que los navegadores bloquean esas peticiones cuando la
+// página se abre directamente con file:// (doble clic en el archivo, sin servidor).
 downloadPdfBtn.addEventListener('click', () => {
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    
-    doc.setFontSize(18);
-    doc.text("Reporte: Planeación y Programación de la Producción", 15, 20);
-    
-    doc.setFontSize(12);
-    doc.text(`Participante: ${participantName}`, 15, 30);
-    doc.text(`Puntuación Final: ${score} / ${questions.length}`, 15, 38);
-    
-    let yPos = 50;
-    
-    userResults.forEach((result, index) => {
-        if (yPos > 270) {
-            doc.addPage();
-            yPos = 20;
-        }
-        
-        doc.setFont("helvetica", "bold");
-        const splitTitle = doc.splitTextToSize(`${index + 1}. ${result.pregunta}`, 180);
-        doc.text(splitTitle, 15, yPos);
-        yPos += (splitTitle.length * 6);
-        
-        doc.setFont("helvetica", "normal");
-        const status = result.esCorrecto ? "CORRECTO" : "INCORRECTO";
-        doc.setTextColor(result.esCorrecto ? 0 : 255, result.esCorrecto ? 128 : 0, 0); 
-        doc.text(`Resultado: ${status}`, 15, yPos);
-        doc.setTextColor(0, 0, 0); 
-        yPos += 7;
-        
-        const splitUserAns = doc.splitTextToSize(`Tu respuesta: ${result.respuestaUsuario}`, 180);
-        doc.text(splitUserAns, 15, yPos);
-        yPos += (splitUserAns.length * 6);
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
 
-        if (!result.esCorrecto) {
-            const splitCorrAns = doc.splitTextToSize(`Respuesta Correcta: ${result.respuestaCorrecta}`, 180);
-            doc.text(splitCorrAns, 15, yPos);
-            yPos += (splitCorrAns.length * 6);
-        }
-        yPos += 7; 
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 15;
+    const contentWidth = pageWidth - margin * 2;
+    const headerHeight = 34;
+
+    const palette = {
+        primaryDark: [10, 79, 122],
+        dark: [20, 33, 61],
+        muted: [107, 114, 128],
+        success: [22, 163, 74],
+        successBg: [220, 252, 231],
+        warning: [180, 83, 9],
+        warningBg: [254, 243, 199],
+        danger: [220, 38, 38],
+        dangerText: [153, 27, 27],
+        dangerBg: [254, 226, 226],
+        lightGray: [243, 244, 246],
+        white: [255, 255, 255]
+    };
+
+    const percentage = Math.round((score / questions.length) * 100);
+    const today = new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
+
+    const logo = (typeof LOGO_DATA_URL !== 'undefined')
+        ? { dataUrl: LOGO_DATA_URL, width: LOGO_WIDTH, height: LOGO_HEIGHT }
+        : null; // Si logo-data.js no cargó, el reporte sigue sin membrete
+
+    doc.setProperties({
+        title: `Resultados - ${participantName}`,
+        subject: 'Examen: Planeación y Programación de la Producción',
+        author: participantName
     });
+
+    function drawHeader() {
+        doc.setFillColor(...palette.primaryDark);
+        doc.rect(0, 0, pageWidth, headerHeight, 'F');
+        doc.setTextColor(...palette.white);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(18);
+        doc.text('Reporte de Examen', margin, 15);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10.5);
+        doc.text('Planeación y Programación de la Producción', margin, 23);
+
+        if (logo) {
+            const boxW = 34, boxH = 15, pad = 2;
+            const boxX = pageWidth - margin - boxW, boxY = 5;
+            doc.setFillColor(...palette.white);
+            doc.roundedRect(boxX, boxY, boxW, boxH, 2, 2, 'F');
+
+            const availW = boxW - pad * 2, availH = boxH - pad * 2;
+            const ratio = logo.width / logo.height;
+            let imgW = availW, imgH = imgW / ratio;
+            if (imgH > availH) { imgH = availH; imgW = imgH * ratio; }
+            const imgX = boxX + (boxW - imgW) / 2;
+            const imgY = boxY + (boxH - imgH) / 2;
+            doc.addImage(logo.dataUrl, 'JPEG', imgX, imgY, imgW, imgH);
+
+            doc.setFontSize(8);
+            doc.setTextColor(...palette.white);
+            doc.text(today, boxX + boxW, boxY + boxH + 5, { align: 'right' });
+        } else {
+            doc.setFontSize(9);
+            doc.text(today, pageWidth - margin, 15, { align: 'right' });
+        }
+    }
+
+    function drawFooter(pageIndex, totalPages) {
+        doc.setDrawColor(...palette.lightGray);
+        doc.setLineWidth(0.3);
+        doc.line(margin, pageHeight - 15, pageWidth - margin, pageHeight - 15);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(...palette.muted);
+        doc.text('Transfergraphic · Vulcanizable Labels', margin, pageHeight - 9);
+        doc.text(`Página ${pageIndex} de ${totalPages}`, pageWidth - margin, pageHeight - 9, { align: 'right' });
+    }
+
+    // --- Página 1: encabezado + tarjeta de resumen ---
+    drawHeader();
+    let yPos = headerHeight + 12;
+
+    doc.setFillColor(...palette.lightGray);
+    doc.roundedRect(margin, yPos, contentWidth, 26, 3, 3, 'F');
+
+    doc.setTextColor(...palette.dark);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12.5);
+    doc.text(participantName, margin + 6, yPos + 11);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(...palette.muted);
+    doc.text('Participante', margin + 6, yPos + 18);
+
+    const tone = percentage >= 70 ? 'success' : (percentage >= 50 ? 'warning' : 'danger');
+    const badgeColor = palette[tone];
+    const badgeBg = palette[`${tone}Bg`];
+    const badgeW = 48;
+    const badgeX = margin + contentWidth - 6 - badgeW;
+
+    doc.setFillColor(...badgeBg);
+    doc.roundedRect(badgeX, yPos + 4, badgeW, 18, 3, 3, 'F');
+    doc.setTextColor(...badgeColor);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text(`${score} / ${questions.length}`, badgeX + badgeW / 2, yPos + 12, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.text(`${percentage}% de aciertos`, badgeX + badgeW / 2, yPos + 18, { align: 'center' });
+
+    yPos += 36;
+
+    doc.setTextColor(...palette.dark);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text('Detalle de Respuestas', margin, yPos);
+    yPos += 3;
+    doc.setDrawColor(...palette.primaryDark);
+    doc.setLineWidth(0.6);
+    doc.line(margin, yPos, margin + 34, yPos);
+    yPos += 9;
+
+    // --- Tarjetas por pregunta ---
+    const textPadding = 7;
+    const qWrapWidth = contentWidth - 14 - 32; // deja espacio para la insignia de estado
+    const answerWrapWidth = contentWidth - 14;
+
+    userResults.forEach((result) => {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10.5);
+        const qLines = doc.splitTextToSize(result.pregunta, qWrapWidth);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9.5);
+        const ansLines = doc.splitTextToSize(`Tu respuesta: ${result.respuestaUsuario}`, answerWrapWidth);
+        const corrLines = result.esCorrecto
+            ? []
+            : doc.splitTextToSize(`Respuesta correcta: ${result.respuestaCorrecta}`, answerWrapWidth);
+
+        const boxHeight = 8 + qLines.length * 5.2 + ansLines.length * 5 + corrLines.length * 5 + 5;
+
+        if (yPos + boxHeight > pageHeight - 20) {
+            doc.addPage();
+            drawHeader();
+            yPos = headerHeight + 12;
+        }
+
+        const boxBg = result.esCorrecto ? palette.successBg : palette.dangerBg;
+        const accent = result.esCorrecto ? palette.success : palette.danger;
+
+        doc.setFillColor(...boxBg);
+        doc.roundedRect(margin, yPos, contentWidth, boxHeight, 2.5, 2.5, 'F');
+        doc.setFillColor(...accent);
+        doc.rect(margin, yPos + 1.2, 2.2, boxHeight - 2.4, 'F');
+
+        const statusText = result.esCorrecto ? 'CORRECTO' : 'INCORRECTO';
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        const pillW = doc.getTextWidth(statusText) + 6;
+        const pillX = margin + contentWidth - pillW - 4;
+        doc.setFillColor(...accent);
+        doc.roundedRect(pillX, yPos + 4, pillW, 6, 2, 2, 'F');
+        doc.setTextColor(...palette.white);
+        doc.text(statusText, pillX + pillW / 2, yPos + 8, { align: 'center' });
+
+        let innerY = yPos + 8;
+        doc.setTextColor(...palette.dark);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10.5);
+        doc.text(qLines, margin + textPadding, innerY);
+        innerY += qLines.length * 5.2 + 1.5;
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9.5);
+        doc.setTextColor(...palette.dark);
+        doc.text(ansLines, margin + textPadding, innerY);
+        innerY += ansLines.length * 5;
+
+        if (corrLines.length) {
+            doc.setTextColor(...palette.dangerText);
+            doc.text(corrLines, margin + textPadding, innerY);
+        }
+
+        yPos += boxHeight + 6;
+    });
+
+    // --- Pie de página en todas las páginas, con numeración total ---
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        drawFooter(i, totalPages);
+    }
 
     doc.save(`Examen_Planeacion_${participantName.replace(/\s+/g, '_')}.pdf`);
 });
@@ -377,6 +563,8 @@ restartBtn.addEventListener('click', () => {
     score = 0;
     userResults = [];
     nameInput.value = '';
+    progressFill.style.width = '0%';
+    scoreRing.style.setProperty('--progress', 0);
     resultScreen.classList.remove('active');
     startScreen.classList.add('active');
 });
