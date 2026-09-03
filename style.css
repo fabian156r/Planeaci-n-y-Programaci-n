@@ -92,6 +92,10 @@ h1 { font-family: 'Poppins', sans-serif; font-size: 1.55rem; color: var(--text-d
     to { transform: scale(1); opacity: 1; }
 }
 
+.input-row { display: grid; grid-template-columns: 1fr; gap: 0 12px; }
+@media (min-width: 480px) {
+    .input-row { grid-template-columns: 1fr 1fr; }
+}
 .input-group { margin: 8px 0 22px; text-align: left; }
 .input-group label { display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.9rem; }
 .input-group input {

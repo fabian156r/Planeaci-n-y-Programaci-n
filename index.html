@@ -28,9 +28,15 @@
             <h1>Examen: <span class="text-gradient">Planeación y Programación</span></h1>
             <p class="subtitle">Lee con atención. Tendrás 5 segundos para leer la pregunta y 30 segundos para responder.</p>
 
-            <div class="input-group">
-                <label for="username">Nombre del Participante</label>
-                <input type="text" id="username" placeholder="Ingresa tu nombre completo..." required autocomplete="off">
+            <div class="input-row">
+                <div class="input-group">
+                    <label for="username">Nombre del Participante</label>
+                    <input type="text" id="username" placeholder="Ingresa tu nombre completo..." required autocomplete="off">
+                </div>
+                <div class="input-group">
+                    <label for="exam-date">Fecha</label>
+                    <input type="date" id="exam-date">
+                </div>
             </div>
 
             <button id="start-btn">Comenzar Examen <span class="btn-arrow">→</span></button>

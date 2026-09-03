@@ -103,7 +103,8 @@ let readTimerInterval;
 let timeLeft = 30; 
 let readTimeLeft = 5; 
 let participantName = "";
-let userResults = []; 
+let examDate = "";
+let userResults = [];
 
 const startScreen = document.getElementById('start-screen');
 const quizScreen = document.getElementById('quiz-screen');
@@ -118,11 +119,23 @@ const readingMessage = document.getElementById('reading-message');
 const downloadPdfBtn = document.getElementById('download-pdf-btn');
 const restartBtn = document.getElementById('restart-btn');
 const nameInput = document.getElementById('username');
+const dateInput = document.getElementById('exam-date');
 const progressFill = document.getElementById('progress-fill');
 const timerText = document.getElementById('timer-text');
 const scoreRing = document.getElementById('score-ring');
 const scoreRingText = document.getElementById('score-ring-text');
 const resultEmoji = document.getElementById('result-emoji');
+
+// Por defecto la fecha es hoy, pero el participante puede cambiarla
+dateInput.value = new Date().toISOString().slice(0, 10);
+
+function formatoFechaLegible(iso) {
+    if (!iso) return '—';
+    const partes = iso.split('-');
+    if (partes.length !== 3) return iso;
+    const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    return `${partes[2]} ${meses[parseInt(partes[1], 10) - 1]} ${partes[0]}`;
+}
 
 // Audio
 const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -202,7 +215,8 @@ startBtn.addEventListener('click', () => {
         alert("Por favor, ingresa tu nombre completo para comenzar.");
         return;
     }
-    initAudio(); 
+    examDate = dateInput.value || new Date().toISOString().slice(0, 10);
+    initAudio();
     startScreen.classList.remove('active');
     quizScreen.classList.add('active');
     startQuestionCycle();
@@ -454,7 +468,7 @@ downloadPdfBtn.addEventListener('click', () => {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(...palette.muted);
-    doc.text('Participante', margin + 6, yPos + 18);
+    doc.text(`Participante · Fecha del examen: ${formatoFechaLegible(examDate)}`, margin + 6, yPos + 18);
 
     const tone = percentage >= 70 ? 'success' : (percentage >= 50 ? 'warning' : 'danger');
     const badgeColor = palette[tone];
@@ -563,6 +577,7 @@ restartBtn.addEventListener('click', () => {
     score = 0;
     userResults = [];
     nameInput.value = '';
+    dateInput.value = new Date().toISOString().slice(0, 10);
     progressFill.style.width = '0%';
     scoreRing.style.setProperty('--progress', 0);
     resultScreen.classList.remove('active');
